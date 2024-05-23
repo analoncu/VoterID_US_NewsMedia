@@ -1,0 +1,68 @@
+---
+title: "Untitled"
+output: html_document
+date: "2023-03-22"
+---
+This Markdown documents uses the library LexisNexisTools to parse docx's downloaded from NexisUni
+
+```{r}
+install.packages("LexisNexisTools")
+```
+
+```{r}
+install.packages("dplyr")
+```
+```{r}
+library(dyplr)
+```
+
+```{r}
+library(LexisNexisTools)
+```
+
+
+```{r}
+data1 <- LexisNexisTools::lnt_read("C:/Users/2146806A/OneDrive - University of Glasgow/University of Glasgow/Amsterdam Visit/March_analysis/NexisUni/Articles/files_13-16", remove_cover=FALSE)
+
+data2 <- LexisNexisTools::lnt_read("C:/Users/2146806A/OneDrive - University of Glasgow/University of Glasgow/Amsterdam Visit/March_analysis/NexisUni/Articles/files_17-19", remove_cover=FALSE)
+```
+```{r}
+data3 <- LexisNexisTools::lnt_read("C:/Users/2146806A/OneDrive - University of Glasgow/University of Glasgow/Amsterdam Visit/March_analysis/files_19-22", remove_cover=FALSE)
+```
+```{r}
+data4 <- LexisNexisTools::lnt_read("C:/Users/2146806A/OneDrive - University of Glasgow/University of Glasgow/Amsterdam Visit/March_analysis/files_22-23", remove_cover=FALSE)
+```
+
+```{r}
+meta_df <- data2@meta
+articles_df <- data2@articles
+paragraphs_df <- data2@paragraphs
+
+# Print meta to get an idea of the data
+head(meta_df, n = 3)
+```
+```{r}
+meta_articles_df1 <- lnt_convert(data1, to = "data.frame")
+meta_articles_df2 <- lnt_convert(data2, to = "data.frame")
+meta_articles_df3 <- lnt_convert(data3, to = "data.frame")
+meta_articles_df4 <- lnt_convert(data4, to = "data.frame")
+
+```
+
+
+```{r}
+corpus <- rbind(meta_articles_df1,meta_articles_df2,meta_articles_df3,meta_articles_df4)
+```
+
+```{r}
+write.csv(corpus,"NexisUni-data-US.csv", row.names = FALSE)
+```
+
+# Preliminary stats about the data
+
+```{r}
+library(dplyr)
+```
+
+
+

@@ -1,0 +1,264 @@
+---
+title: "Merging Data Together"
+output: html_document
+date: "2023-03-23"
+---
+
+# Merging Data Together
+
+The following document merges the news articles found from mediacloud and nexisuni. We load the csv files containing the data:
+
+```{r}
+mediacloud <- read.csv("C:/Users/2146806A/OneDrive - University of Glasgow/University of Glasgow/Amsterdam Visit/ASCoR-Project/Data Files/finalcorpus.csv") # data used for original project in 2022
+
+nexisuni <- read.csv("C:/Users/2146806A/OneDrive - University of Glasgow/University of Glasgow/Amsterdam Visit/March_analysis/NexisUni-data-US.csv") # new data gathered via NexisUni
+
+newsplease <- read.csv("C:/Users/2146806A/OneDrive - University of Glasgow/University of Glasgow/Amsterdam Visit/March_analysis/newdata/newsplease_corpus.csv") # new data scraped with newsplease
+```
+
+We only need articles from The New York Times, USA Today and Fox News in the data gathered in NexisUni
+
+```{r, echo=FALSE, results = 'hide'}
+nexisuni_subset <- nexisuni[nexisuni$Source %in% c("The New York Times", "USA Today", "Fox News"), ]
+print(table(nexisuni_subset$Source))
+```
+
+### Merging old and new MediaCloud data
+
+We want to keep only articles from The Daily Caller, Washington Times, Breitbart, NY Post, CNN, Huffington Post and Washington post from the mediacloud dataset and merge it with the new data.
+
+We first check how sources are named:
+
+```{r}
+print(table(mediacloud$media_name))
+```
+
+```{r}
+print(table(newsplease$source))
+```
+
+We don't need new data for fox news, nytimes, nbc news or freebeacon, so we create a subset.
+
+```{r}
+mediacloud_subset <- mediacloud[!(mediacloud$media_name %in% c("Free Beacon", "NBC News", "USA Today", "The New York Times", "Fox News")), ]
+
+# print the updated data frame
+print(table(mediacloud_subset$media_name))
+```
+
+#### Identifying sources names from urls
+
+We change the names for the sources to subset the data and only keep the new data that we need
+
+```{r}
+library(tidyverse)
+library(inops)
+newsplease_subset <- newsplease %>% 
+  mutate(
+    Source = case_when(
+      source %in~% "cnn" ~ "CNN",
+      source %in~% "breitbart" ~ "Breitbart",
+      source %in~% "washingtontimes" ~ "Washington Times",
+      source %in~% "nypost" ~ "NY Post",
+      source %in~% "dailycaller" ~ "Daily Caller",
+      T ~ NA_character_
+    )
+  )
+
+newsplease_subset <- newsplease_subset[complete.cases(newsplease_subset$Source), ]
+```
+
+Now we need to merge the mediacloud data with the new data so we make sure we have the same columns in the dataframes before binding them together.
+
+#### Removing columns we don't need
+
+```{r}
+colnames(newsplease_subset)
+```
+
+I want to end up with the same 7 columns contained in the OG dataframe so I first remove the columns I don´t need
+
+```{r}
+newsplease_subset <- select(newsplease_subset, -authors, -date_download, -date_modify, -description, -filename, -image_url, -language, -localpath, -source_domain, -text, -title_page, -title_rss, -source)
+colnames(newsplease_subset)
+```
+
+```{r}
+colnames(mediacloud_subset)
+```
+
+```{r}
+newsplease_subset <- newsplease_subset %>%
+  rename(date = date_publish, source = url, media_name = Source)
+```
+
+```{r}
+colnames(newsplease_subset)
+```
+
+#### Assign Ideology and Congress to articles
+
+Now I need to assign the ideological leaning of the sources, so I create a new column ideology
+
+```{r}
+print(table(newsplease_subset$media_name))
+```
+
+```{r}
+# create new column 'ideology'
+newsplease_subset$ideology <- ifelse(newsplease_subset$media_name %in% c("Breitbart", "Daily Caller", "NY Post", "Washington Times"), "right", "left")
+```
+
+We convert the column date to a date type for both dataframes
+
+```{r}
+newsplease_subset$date2 <- as.Date(newsplease_subset$date)
+mediacloud_subset$date2 <- as.Date(mediacloud_subset$date)
+```
+
+We assign dates to congresses
+
+```{r}
+# create new column 'Congress'
+newsplease_subset$Congress <- case_when(newsplease_subset$date >= as.Date("2013-01-01") & newsplease_subset$date < as.Date("2015-01-01") ~ "113th",
+                                        newsplease_subset$date >= as.Date("2015-01-01") & newsplease_subset$date < as.Date("2017-01-01") ~ "114th",
+                                        newsplease_subset$date >= as.Date("2017-01-01") & newsplease_subset$date < as.Date("2019-01-01") ~ "115th",
+                                        newsplease_subset$date >= as.Date("2019-01-01") & newsplease_subset$date < as.Date("2021-01-01") ~ "116th",
+                                        newsplease_subset$date >= as.Date("2021-01-01") & newsplease_subset$date < as.Date("2023-01-01") ~ "117th",
+                                        TRUE ~ "other")
+```
+
+```{r}
+print(table(newsplease_subset$Congress))
+```
+
+```{r}
+newsplease_subset <- select(newsplease_subset, -date)
+mediacloud_subset <- select(mediacloud_subset, -date)
+```
+
+We rename date2 column to date for both datasets
+
+```{r}
+newsplease_subset <- newsplease_subset %>%
+  rename(date = date2)
+
+mediacloud_subset <- mediacloud_subset %>%
+  rename(date = date2)
+```
+
+Move date to the far left
+
+```{r}
+newsplease_subset <- newsplease_subset[, c("date", names(newsplease_subset)[!names(newsplease_subset) %in% "date"])]
+mediacloud_subset <- mediacloud_subset[, c("date", names(mediacloud_subset)[!names(mediacloud_subset) %in% "date"])]
+```
+
+### Merge two dataframes together (old and new mediacloud data)
+
+FINALLY we are ready to merge the new data with the old data, resulting in 2574 articles
+
+```{r}
+mediacloud_corpus <- rbind(mediacloud_subset, newsplease_subset)
+```
+
+### Prepare NexisUni data
+
+We now prep the nexisuni data to join it with this corpus of documents
+
+```{r}
+colnames(nexisuni_subset)
+```
+
+We first remove the columns we don´t need
+
+```{r}
+nexisuni_subset <- select(nexisuni_subset, -ID, -Length, -Author, -Section, -Edition, -Graphic)
+colnames(nexisuni_subset)
+```
+
+We rename the columns
+
+```{r}
+colnames(mediacloud_corpus)
+```
+
+```{r}
+nexisuni_subset <- nexisuni_subset %>%
+  rename(date = Date, media_name = Source, title= Headline, maintext = Article)
+```
+
+```{r}
+nexisuni_subset <- nexisuni_subset %>%
+  rename(source = Source_File)
+```
+
+```{r}
+nexisuni_subset <- select(nexisuni_subset, -Newspaper)
+```
+
+We create the column ideology
+
+```{r}
+print(table(nexisuni_subset$media_name))
+```
+
+```{r}
+nexisuni_subset$ideology <- ifelse(nexisuni_subset$media_name %in% c("Fox News"), "right", "left")
+```
+
+```{r}
+nexisuni_subset$date <- as.Date(nexisuni_subset$date)
+```
+
+We create the Congress column now
+
+```{r}
+# create new column 'Congress'
+nexisuni_subset$Congress <- case_when(nexisuni_subset$date >= as.Date("2013-01-01") & nexisuni_subset$date < as.Date("2015-01-01") ~ "113th",
+                                        nexisuni_subset$date >= as.Date("2015-01-01") & nexisuni_subset$date < as.Date("2017-01-01") ~ "114th",
+                                        nexisuni_subset$date >= as.Date("2017-01-01") & nexisuni_subset$date < as.Date("2019-01-01") ~ "115th",
+                                        nexisuni_subset$date >= as.Date("2019-01-01") & nexisuni_subset$date < as.Date("2021-01-01") ~ "116th",
+                                        nexisuni_subset$date >= as.Date("2021-01-01") & nexisuni_subset$date < as.Date("2023-01-01") ~ "117th",
+                                        TRUE ~ "other")
+```
+
+We reorder the columns to merge the dataframes
+
+```{r}
+nexisuni_subset <- nexisuni_subset[, c("date", "maintext", "title", "source", "media_name", "ideology", "Congress")]
+```
+
+### Merge Mediacloud data with NexisUni data
+
+AND NOW we bind together the mediacloud data with the nexisuni data
+
+```{r}
+corpus <- rbind(mediacloud_corpus, nexisuni_subset)
+```
+
+```{r}
+date_range <- corpus %>%
+  group_by(media_name) %>%
+  summarize(from = min(date), to = max(date))
+
+# show the resulting table
+date_range
+```
+
+```{r}
+CNN <- mediacloud[mediacloud$media_name == 'CNN', ]
+Breitbart <- mediacloud[mediacloud$media_name == 'Breitbart', ]
+fox_news <- mediacloud[mediacloud$media_name == 'Fox News', ]
+Huffington_Post <- mediacloud[mediacloud$media_name == 'Huffington Post', ]
+NY_Post <- mediacloud[mediacloud$media_name == 'NY Post', ]
+Daily_Caller <- mediacloud[mediacloud$media_name == 'Daily Caller', ]
+Washington_Post <- mediacloud[mediacloud$media_name == 'Washington Post', ]
+MSNBC <- mediacloud[mediacloud$media_name == 'Washington Post', ]
+```
+
+Now we export the corpus
+
+```{r}
+write.csv(corpus,"Mediacloud-NexisUni-corpus.csv", row.names = FALSE)
+```
